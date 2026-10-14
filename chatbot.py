@@ -61,13 +61,15 @@ class GeminiChatbot:
             )
         self.client = genai.Client(api_key=config.GEMINI_API_KEY)
 
+# chatbot.py
+
     def stream_response(
         self,
         prompt: str,
         conversation: ConversationManager,
         system_instruction: str = SYSTEM_PROMPT,
     ) -> Iterator[str]:
-        """Envia mensagem e gera resposta streaming com retries (Backoff Exponencial)."""
+        """Envia mensagem e gera resposta streaming com retries e fallback automático."""
         if not prompt or not prompt.strip():
             raise ValueError("O prompt enviado não pode estar vazio.")
 
@@ -80,36 +82,44 @@ class GeminiChatbot:
             temperature=0.7,
         )
 
-        delay = config.INITIAL_RETRY_DELAY
-        full_response_text = ""
+        # Lista de modelos para tentar (Principal -> Fallback)
+        models_to_try = [config.MODEL_NAME, getattr(config, "FALLBACK_MODEL_NAME", "gemini-2.5-pro")]
 
-        for attempt in range(1, config.MAX_RETRIES + 1):
-            try:
-                response_stream = self.client.models.generate_content_stream(
-                    model=config.MODEL_NAME,
-                    contents=contents,
-                    config=req_config,
-                )
+        for current_model in models_to_try:
+            delay = config.INITIAL_RETRY_DELAY
+            full_response_text = ""
 
-                for chunk in response_stream:
-                    chunk_text = chunk.text or ""
-                    full_response_text += chunk_text
-                    yield chunk_text
+            for attempt in range(1, config.MAX_RETRIES + 1):
+                try:
+                    response_stream = self.client.models.generate_content_stream(
+                        model=current_model,
+                        contents=contents,
+                        config=req_config,
+                    )
 
-                # Sucesso: Adiciona ao histórico do gerenciador
-                conversation.add_message("user", prompt)
-                conversation.add_message("model", full_response_text)
-                return
+                    for chunk in response_stream:
+                        chunk_text = chunk.text or ""
+                        full_response_text += chunk_text
+                        yield chunk_text
 
-            except APIError as e:
-                if attempt == config.MAX_RETRIES:
-                    raise RuntimeError(
-                        f"Falha na API após {config.MAX_RETRIES} tentativas. Erro: {e.message}"
-                    ) from e
-                
-                print(f"\n[Aviso: Erro temporário/Rate limit na API ({e.code}). Tentativa {attempt}/{config.MAX_RETRIES}. Aguardando {delay:.1f}s...]")
-                time.sleep(delay)
-                delay *= config.BACKOFF_FACTOR
+                    # Sucesso! Registra no histórico e encerra a função
+                    conversation.add_message("user", prompt)
+                    conversation.add_message("model", full_response_text)
+                    return
 
-            except Exception as e:
-                raise RuntimeError(f"Erro inesperado durante comunicação com o Gemini: {str(e)}") from e
+                except APIError as e:
+                    # Se for erro 404 (modelo não existe), passa para o próximo modelo imediatamente
+                    if e.code == 404:
+                        break
+
+                    # Se atingiu o limite de retries neste modelo
+                    if attempt == config.MAX_RETRIES:
+                        if current_model != models_to_try[-1]:
+                            print(f"\n[Aviso: {current_model} indisponível ({e.code}). Alternando automaticamente para o modelo de backup ({models_to_try[-1]})...]")
+                        break
+
+                    print(f"\n[Aviso: Erro temporário/Sobrecarga em {current_model} ({e.code}). Tentativa {attempt}/{config.MAX_RETRIES}. Aguardando {delay:.1f}s...]")
+                    time.sleep(delay)
+                    delay *= config.BACKOFF_FACTOR
+
+        raise RuntimeError("Todos os modelos estão indisponíveis no momento devido à alta demanda. Tente novamente em alguns instantes.")
