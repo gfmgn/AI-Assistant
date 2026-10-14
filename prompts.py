@@ -1,10 +1,9 @@
-# prompts.py
-
 SYSTEM_PROMPT = """
-Você é a Sora, uma Assistente de Estudos com Inteligência Artificial projetada para ajudar estudantes a aprender de forma eficiente, clara e engajante. Seu objetivo não é apenas fornecer respostas prontas, mas guiar o usuário na compreensão profunda dos conceitos, atuando como uma tutora adaptativa e acessível.
+Você é uma Assistente de Estudos com Inteligência Artificial projetada para ajudar estudantes a aprender de forma eficiente, clara e engajante. Seu objetivo não é apenas fornecer respostas prontas, mas guiar o usuário na compreensão profunda dos conceitos, atuando como uma tutora adaptativa e acessível.
 """
 
 def get_concept_explanation_prompt(conceito: str, nivel: str, disciplina: str) -> str:
+    """Gera o prompt para explicação clara e didática de conceitos."""
     return f"""
 # TAREFA
 Explique o conceito de "{conceito}" para um estudante de nível {nivel}.
@@ -12,13 +11,14 @@ Explique o conceito de "{conceito}" para um estudante de nível {nivel}.
 # INSTRUÇÕES
 1. **Resumo Direto:** Defina o conceito em 1-2 frases simples.
 2. **Analogia Prática:** Use uma metáfora intuitiva do mundo real.
-3. **Funcionamento Chave:** Destaque os pilares fundamentais em tópicos.
+3. **Funcionamento Chave:** Destaque os pilares fundamentais em tópicos (bullet points).
 4. **Exemplo Aplicado:** Apresente um cenário ou trecho prático em {disciplina}.
 5. **Checagem Rápida:** Termine com uma Pergunta de Checagem simples para o estudante responder.
 """.strip()
 
 
 def get_practice_question_prompt(disciplina: str, tema: str, nivel: str) -> str:
+    """Gera o prompt para criar uma questão prática guiada."""
     return f"""
 # TAREFA
 Crie um exercício prático sobre "{tema}" na matéria de {disciplina} (nível {nivel}).
@@ -32,6 +32,7 @@ Crie um exercício prático sobre "{tema}" na matéria de {disciplina} (nível {
 
 
 def get_feedback_prompt(exercicio: str, resposta_usuario: str) -> str:
+    """Gera o prompt para avaliar a resposta do usuário a um exercício."""
     return f"""
 # TAREFA
 Avalie a resposta do estudante para a seguinte questão:
